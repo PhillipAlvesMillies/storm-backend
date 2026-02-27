@@ -2,13 +2,13 @@ const express = require("express");
 const cors = require("cors");
 const multer = require("multer");
 const { Pool } = require("pg");
-const nodemailer = require("nodemailer");
 
 const app = express();
 
+// ─── BASE DE DADOS (PostgreSQL) ───────────────────────────────────────────────
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : false,
+  ssl: { rejectUnauthorized: false },
 });
 
 async function initDB() {
@@ -45,28 +45,35 @@ async function initDB() {
   console.log("✅ Base de dados iniciada");
 }
 
-const transporter = nodemailer.createTransport({
-  service: "gmail",
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
-  },
-});
-
+// ─── EMAIL (Resend) ───────────────────────────────────────────────────────────
 async function enviarEmailNotificacao({ assunto, html }) {
   try {
-    await transporter.sendMail({
-      from: `"Reconstruir Portugal" <${process.env.EMAIL_USER}>`,
-      to: process.env.EMAIL_DESTINO || process.env.EMAIL_USER,
-      subject: assunto,
-      html,
+    const response = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${process.env.RESEND_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from: "Reconstruir Portugal <onboarding@resend.dev>",
+        to: ["reconstruirportugal.notif@gmail.com"],
+        subject: assunto,
+        html: html,
+      }),
     });
-    console.log(`📧 Email enviado: ${assunto}`);
+
+    if (response.ok) {
+      console.log(`📧 Email enviado: ${assunto}`);
+    } else {
+      const erro = await response.json();
+      console.error("❌ Erro ao enviar email:", erro);
+    }
   } catch (err) {
     console.error("❌ Erro ao enviar email:", err.message);
   }
 }
 
+// ─── MIDDLEWARE ───────────────────────────────────────────────────────────────
 app.use(cors({ origin: "*" }));
 app.use(express.json({ limit: "2mb" }));
 app.use(express.urlencoded({ extended: true }));
@@ -76,8 +83,10 @@ const upload = multer({
   limits: { fileSize: 20 * 1024 * 1024 },
 });
 
+// ─── HEALTH CHECK ─────────────────────────────────────────────────────────────
 app.get("/", (req, res) => res.status(200).send("OK"));
 
+// ─── HELPER ──────────────────────────────────────────────────────────────────
 function infoFicheiros(files = []) {
   return files.map((f) => ({
     nome: f.originalname,
@@ -86,6 +95,7 @@ function infoFicheiros(files = []) {
   }));
 }
 
+// ─── 1) PEDIDO DE ORÇAMENTO ───────────────────────────────────────────────────
 app.post("/api/orcamentos", upload.any(), async (req, res) => {
   const b = req.body;
   const ficheiros = infoFicheiros(req.files);
@@ -117,6 +127,7 @@ app.post("/api/orcamentos", upload.any(), async (req, res) => {
   }
 });
 
+// ─── 2) SEGUROS ───────────────────────────────────────────────────────────────
 app.post("/api/seguros", upload.any(), async (req, res) => {
   const b = req.body;
   const ficheiros = infoFicheiros(req.files);
@@ -147,6 +158,7 @@ app.post("/api/seguros", upload.any(), async (req, res) => {
   }
 });
 
+// ─── 3) APOIOS DO ESTADO ──────────────────────────────────────────────────────
 app.post("/api/apoios-estado", upload.any(), async (req, res) => {
   const b = req.body;
   const ficheiros = infoFicheiros(req.files);
@@ -177,6 +189,7 @@ app.post("/api/apoios-estado", upload.any(), async (req, res) => {
   }
 });
 
+// ─── 4) EMPREITEIROS ──────────────────────────────────────────────────────────
 app.post("/api/empreiteiros", upload.any(), async (req, res) => {
   const b = req.body;
   const ficheiros = infoFicheiros(req.files);
@@ -208,6 +221,7 @@ app.post("/api/empreiteiros", upload.any(), async (req, res) => {
   }
 });
 
+// ─── INICIAR SERVIDOR ─────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 3000;
 
 initDB()
