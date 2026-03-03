@@ -55,8 +55,8 @@ async function enviarEmailNotificacao({ assunto, html }) {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        from: "Reconstruir Portugal <onboarding@resend.dev>",
-        to: ["reconstruirportugal.notif@gmail.com"],
+        from: "Reconstruir Portugal <noreply@reconstruirportugal.com>",
+        to: ["rui15alves@gmail.com"],
         subject: assunto,
         html: html,
       }),
@@ -232,3 +232,4 @@ initDB()
     console.error("❌ Falha ao iniciar base de dados:", err);
     process.exit(1);
   });
+
